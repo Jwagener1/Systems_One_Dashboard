@@ -45,7 +45,7 @@ def main() -> None:
     logger.info("Starting Dash server on %s:%s (debug=%s)...", config.HOST, config.PORT, config.DEBUG_MODE)
     # Use configuration values for host, port and debug mode.  This
     # allows these settings to be overridden via environment variables.
-    dash_app.run_server(host=config.HOST, port=config.PORT, debug=config.DEBUG_MODE)
+    dash_app.run(host=config.HOST, port=config.PORT, debug=config.DEBUG_MODE)
 
 
 if __name__ == "__main__":

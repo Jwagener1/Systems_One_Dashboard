@@ -92,3 +92,87 @@ plotly_dash_mvvm/
 
 Feel free to experiment and build upon this structure.  Happy
 dashboarding!
+
+## InfluxDB Integration
+
+This project includes comprehensive InfluxDB integration for real-time data visualization. 
+See **[INFLUXDB_GUIDE.md](INFLUXDB_GUIDE.md)** for detailed documentation covering:
+
+- InfluxDB fundamentals and data model
+- Flux query language examples
+- Data discovery tools and techniques  
+- Configuration and security best practices
+- Troubleshooting common issues
+- Developer extension guidelines
+
+**Quick start:** Set connection variables in `.env` and use `scripts/discover_influx.py` to explore your data schema.
+
+### Using InfluxDB as a Data Source
+
+The boilerplate can pull live data from InfluxDB (v2) instead of the
+synthetic sample dataset. This is enabled entirely through environment
+variables—no code changes required.
+
+Set the following variables (e.g. in a local `.env` or your shell
+session). If any are missing the app falls back gracefully to the
+synthetic data.
+
+Required:
+
+```
+INFLUXDB_URL=https://influxdb.bantryprop.com
+INFLUXDB_TOKEN=REDACTED_READ_TOKEN
+INFLUXDB_ORG=systems-one
+INFLUXDB_BUCKET=telemetry
+INFLUXDB_MEASUREMENT=<measurement_name>
+INFLUXDB_CATEGORY_TAG=<tag_used_for_category_grouping>
+INFLUXDB_VALUE1_FIELD=<numeric_field_1>
+INFLUXDB_VALUE2_FIELD=<numeric_field_2>
+```
+
+Optional:
+
+```
+INFLUXDB_RANGE_START=-1h   # Adjust time window, e.g. -24h, -7d
+```
+
+Example PowerShell (session only):
+
+```powershell
+$env:INFLUXDB_URL = "https://influxdb.bantryprop.com"
+$env:INFLUXDB_TOKEN = "<READ_ONLY_TOKEN>"
+$env:INFLUXDB_ORG = "systems-one"
+$env:INFLUXDB_BUCKET = "telemetry"
+$env:INFLUXDB_MEASUREMENT = "<measurement_name>"
+$env:INFLUXDB_CATEGORY_TAG = "<tag_key>"
+$env:INFLUXDB_VALUE1_FIELD = "<field1>"
+$env:INFLUXDB_VALUE2_FIELD = "<field2>"
+$env:INFLUXDB_RANGE_START = "-1h"
+python app.py
+```
+
+Discovering names in the InfluxDB UI:
+
+1. Measurement list: Data Explorer → select bucket `telemetry`, view
+  Measurements panel.
+2. Tag keys: In Script Editor run:
+  ```flux
+  import "influxdata/influxdb/schema"
+  schema.tagKeys(bucket: "telemetry", start: -7d)
+  ```
+3. Field keys:
+  ```flux
+  import "influxdata/influxdb/schema"
+  schema.fieldKeys(bucket: "telemetry", start: -7d)
+  ```
+4. Preview candidate fields:
+  ```flux
+  from(bucket: "telemetry")
+    |> range(start: -15m)
+    |> filter(fn: (r) => r._measurement == "<measurement_name>")
+    |> limit(n: 10)
+  ```
+
+Security: never commit real tokens. Use environment variables or a
+secrets manager. If a token leaks, revoke it in the InfluxDB UI and
+generate a new read‑only token.

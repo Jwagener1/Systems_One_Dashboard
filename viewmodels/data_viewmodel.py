@@ -48,49 +48,40 @@ class DataViewModel:
             self._data = self.service.get_data(force_reload=force_reload)
         return self._data
 
-    def get_categories(self) -> List[str]:
-        """Return a sorted list of categories present in the data.
+    def get_time_series_data(self) -> pd.DataFrame:
+        """Return the full time series data for DIM2 statistics.
 
         Returns:
-            list[str]: Unique categories sorted alphabetically.
+            pd.DataFrame: Time series data with Time, Total Items, Good Reads, No Reads columns.
+        """
+        return self.load_data()
+
+    def get_metrics_list(self) -> List[str]:
+        """Return a list of available metrics for visualization.
+
+        Returns:
+            list[str]: List of metric names.
         """
         df = self.load_data()
-        categories = df["Category"].unique().tolist()
-        categories.sort()
-        return categories
+        # Return all numeric columns except Time
+        numeric_cols = [col for col in df.columns if col != 'Time' and pd.api.types.is_numeric_dtype(df[col])]
+        return numeric_cols
 
-    def get_filtered_data(self, category: Optional[str] = None) -> pd.DataFrame:
-        """Return data filtered by category.
-
-        Args:
-            category (Optional[str]): The category by which to filter.
-                If None or not present in the dataset, the full
-                dataset will be returned.
+    def get_latest_values(self) -> dict[str, float]:
+        """Return the latest values for each metric.
 
         Returns:
-            pd.DataFrame: The filtered data subset.
+            dict[str, float]: Dictionary mapping metric names to their latest values.
         """
         df = self.load_data()
-        if category and category in df["Category"].unique():
-            return df[df["Category"] == category]
-        return df
-
-    def compute_summary_statistics(self, category: Optional[str] = None) -> pd.DataFrame:
-        """Compute summary statistics (mean) for numeric columns.
-
-        This method groups the data by category and computes the mean
-        of numerical columns.  If a category is provided, statistics
-        are computed for that subset; otherwise, overall statistics are
-        returned for each category.
-
-        Args:
-            category (Optional[str]): Optional category filter.
-
-        Returns:
-            pd.DataFrame: A DataFrame with the category and mean values.
-        """
-        df = self.get_filtered_data(category)
-        grouped = df.groupby("Category").agg({"Value1": "mean", "Value2": "mean"}).reset_index()
-        # Rename columns for readability
-        grouped.columns = ["Category", "Mean Value1", "Mean Value2"]
-        return grouped
+        if df.empty or 'Time' not in df.columns:
+            return {}
+        
+        # Get the latest row
+        latest_row = df.iloc[-1]
+        result = {}
+        for col in df.columns:
+            if col != 'Time' and pd.api.types.is_numeric_dtype(df[col]):
+                result[col] = float(latest_row[col])
+        
+        return result

@@ -17,7 +17,7 @@ from viewmodels.data_viewmodel import DataViewModel
 
 
 def create_app(view_model: DataViewModel) -> Dash:
-    """Create and configure a Dash application.
+    """Create and configure a Dash application for DIM2 time series monitoring.
 
     Args:
         view_model (DataViewModel): The view‑model providing data and
@@ -27,93 +27,117 @@ def create_app(view_model: DataViewModel) -> Dash:
         dash.Dash: The configured Dash application ready to run.
     """
     app = Dash(__name__)
-
-    # Precompute category options for the dropdown.
-    categories = view_model.get_categories()
-    dropdown_options = [
-        {"label": "All Categories", "value": ""}
-    ] + [
-        {"label": category, "value": category} for category in categories
-    ]
-
-    # Define the layout using Dash HTML and Core Components.
+    
+    # Define the layout for DIM2 monitoring dashboard
     app.layout = html.Div(
         className="container",
         children=[
-            html.H2("Plotly Dash MVVM Example", style={"textAlign": "center"}),
-            html.Div(
-                children=[
-                    html.Label("Select Category:"),
-                    dcc.Dropdown(
-                        id="category-dropdown",
-                        options=dropdown_options,
-                        value="",
-                        clearable=False,
-                        style={"width": "50%"},
-                    ),
-                ],
-                style={"marginBottom": "1rem"},
+            html.H1("DIM2 Statistics Monitor", style={"textAlign": "center", "marginBottom": "2rem"}),
+            
+            # Latest values display
+            html.Div(id="latest-values", style={"marginBottom": "2rem"}),
+            
+            # Time series chart
+            dcc.Graph(id="timeseries-chart"),
+            
+            # Auto-refresh component
+            dcc.Interval(
+                id='interval-component',
+                interval=30*1000,  # Update every 30 seconds
+                n_intervals=0
             ),
-            dcc.Graph(id="scatter-graph"),
-            dcc.Graph(id="summary-bar-graph"),
         ],
     )
 
-    # Callback to update the scatter graph when the category changes.
+    # Callback to update latest values display
     @app.callback(
-        Output("scatter-graph", "figure"),
-        Input("category-dropdown", "value"),
+        Output("latest-values", "children"),
+        Input("interval-component", "n_intervals"),
     )
-    def update_scatter(selected_category: str) -> Any:
-        """Update scatter plot based on selected category.
+    def update_latest_values(n: int) -> List[Any]:
+        """Update the latest values display.
 
         Args:
-            selected_category (str): Category selected in the dropdown.
+            n (int): Number of intervals elapsed.
 
         Returns:
-            plotly.graph_objs._figure.Figure: A scatter figure.
+            List[Any]: List of HTML components showing latest values.
         """
-        # Convert empty string to None for convenience.
-        category = selected_category or None
-        df = view_model.get_filtered_data(category)
-        # Use plotly.express to construct a scatter plot with color by category.
-        fig = px.scatter(
-            df,
-            x="Value1",
-            y="Value2",
-            color="Category",
-            title="Scatter Plot of Value2 vs. Value1",
-            labels={"Value1": "Value 1", "Value2": "Value 2"},
-        )
-        fig.update_layout(legend_title_text="Category")
-        return fig
+        # Force reload to get fresh data
+        view_model.load_data(force_reload=True)
+        latest_values = view_model.get_latest_values()
+        
+        if not latest_values:
+            return [html.Div("No data available", style={"textAlign": "center"})]
+        
+        cards = []
+        for metric, value in latest_values.items():
+            card = html.Div([
+                html.H4(metric, style={"margin": "0"}),
+                html.H2(f"{value:,.0f}", style={"margin": "0", "color": "#1f77b4"})
+            ], style={
+                "border": "1px solid #ddd", 
+                "borderRadius": "5px", 
+                "padding": "1rem", 
+                "textAlign": "center",
+                "margin": "0.5rem",
+                "flex": "1"
+            })
+            cards.append(card)
+        
+        return [html.Div(cards, style={"display": "flex", "justifyContent": "space-around"})]
 
-    # Callback to update the summary bar chart when the category changes.
+    # Callback to update the time series chart
     @app.callback(
-        Output("summary-bar-graph", "figure"),
-        Input("category-dropdown", "value"),
+        Output("timeseries-chart", "figure"),
+        Input("interval-component", "n_intervals"),
     )
-    def update_bar(selected_category: str) -> Any:
-        """Update bar chart summarising mean values per category.
+    def update_timeseries_chart(n: int) -> Any:
+        """Update time series chart with DIM2 statistics.
 
         Args:
-            selected_category (str): Category selected in the dropdown.
+            n (int): Number of intervals elapsed.
 
         Returns:
-            plotly.graph_objs._figure.Figure: A bar figure.
+            plotly.graph_objs._figure.Figure: A time series figure.
         """
-        category = selected_category or None
-        summary_df = view_model.compute_summary_statistics(category)
-        # Plotly Express can handle multiple y columns directly for grouped bars.
-        fig = px.bar(
-            summary_df,
-            x="Category",
-            y=["Mean Value1", "Mean Value2"],
-            barmode="group",
-            title="Mean Values per Category",
-            labels={"value": "Mean", "variable": "Metric"},
+        # Force reload to get fresh data
+        df = view_model.get_time_series_data()
+        
+        if df.empty or 'Time' not in df.columns:
+            # Return empty figure if no data
+            return {
+                'data': [],
+                'layout': {
+                    'title': 'No data available',
+                    'xaxis': {'title': 'Time'},
+                    'yaxis': {'title': 'Count'}
+                }
+            }
+        
+        # Create time series plot with multiple metrics
+        fig = px.line(
+            df, 
+            x='Time', 
+            y=['Total Items', 'Good Reads', 'No Reads'],
+            title='DIM2 Statistics Over Time',
+            labels={'value': 'Count', 'variable': 'Metric', 'Time': 'Time'},
+            template='plotly_white'
         )
-        fig.update_layout(legend_title_text="Metric")
+        
+        # Customize layout
+        fig.update_layout(
+            height=500,
+            hovermode='x unified',
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            )
+        )
+        
         return fig
 
     return app
